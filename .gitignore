@@ -4,3 +4,4 @@ __pycache__/
 .DS_Store
 processed_queries.txt
 master_companies_raw.csv
+.env
