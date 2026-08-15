@@ -158,7 +158,7 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
     msg.attach(MIMEText(body_plain, 'plain', 'utf-8'))
     msg.attach(MIMEText(body_html, 'html', 'utf-8'))
 
-    overview_file = os.path.join(ATTACH_FOLDER, 'Fire detection system project scope.pdf')
+    overview_file = os.path.join(ATTACH_FOLDER, 'FireGuard_Project_Overview.docx')
     if os.path.isfile(overview_file):
         ctype, encoding = mimetypes.guess_type(overview_file)
         if ctype is None or encoding is not None: ctype = 'application/octet-stream'
@@ -222,7 +222,7 @@ def main():
     print(f'🔍 Processing {len(batch)} companies today…')
 
     attachments = []
-    overview = os.path.join(ATTACH_FOLDER, 'Fire detection system project scope.pdf')
+    overview = os.path.join(ATTACH_FOLDER, 'FireGuard_Project_Overview.docx')
     if os.path.isfile(overview): attachments.append(overview)
     print(f'📎 {len(attachments)} attachment(s) ready.')
 

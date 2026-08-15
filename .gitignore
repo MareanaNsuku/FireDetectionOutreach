@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+processed_queries.txt
+master_companies_raw.csv
