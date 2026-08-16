@@ -12,7 +12,7 @@ permissions:
 jobs:
   outreach:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
@@ -23,19 +23,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Cache Playwright
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests pandas beautifulsoup4 playwright python-dotenv dnspython
-
-      - name: Install Playwright Chromium dependencies
-        run: python -m playwright install --with-deps chromium
+          pip install requests pandas beautifulsoup4 python-dotenv dnspython
 
       - name: Create .env
         run: |
@@ -46,10 +37,11 @@ jobs:
           UCT_SMTP_PORT=587
           EOF
 
-      - name: Run scraper and sender
+      - name: Run email sender 3 times
         run: |
-          python maps_scraper.py || true
-          python daily_auto.py
+          for i in 1 2 3; do
+            python daily_auto.py
+          done
 
       - name: Commit progress back to repo
         run: |
