@@ -1,0 +1,56 @@
+name: Scrape SA Companies and Send
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pandas beautifulsoup4 playwright python-dotenv dnspython
+
+      - name: Install Playwright Chromium dependencies
+        run: python -m playwright install --with-deps chromium
+
+      - name: Create .env
+        run: |
+          cat > .env <<EOF
+          UCT_EMAIL=${{ secrets.UCT_EMAIL }}
+          UCT_PASSWORD=${{ secrets.UCT_PASSWORD }}
+          UCT_SMTP_HOST=smtp.gmail.com
+          UCT_SMTP_PORT=587
+          EOF
+
+      - name: Scrape new South African companies
+        run: python maps_scraper_sa.py
+
+      - name: Send outreach
+        run: |
+          for i in 1 2 3 4; do
+            python daily_auto.py
+          done
+
+      - name: Commit progress
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git add master_companies.csv data/sent_emails.db attachments
+          git commit -m "Add new SA companies and send outreach" || echo "No changes to commit"
+          git push
