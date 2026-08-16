@@ -212,7 +212,7 @@ def main():
     with open(MASTER_CSV, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            if not row['Status'].strip(): rows.append(row)
+            if not (row.get('Status') or '').strip(): rows.append(row)
 
     if not rows:
         print('✅ All companies processed. Run live_scraper.py again for fresh companies.')
