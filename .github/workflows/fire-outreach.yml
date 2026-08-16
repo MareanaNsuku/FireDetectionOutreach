@@ -6,6 +6,9 @@ on:
     - cron: '0 8 * * *'
     - cron: '0 14 * * *'
 
+permissions:
+  contents: write
+
 jobs:
   outreach:
     runs-on: ubuntu-latest
@@ -54,4 +57,5 @@ jobs:
           git config user.email "actions@github.com"
           git add master_companies.csv data/sent_emails.db attachments
           git commit -m "Update outreach progress from Actions" || echo "No changes to commit"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           git push
