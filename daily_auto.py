@@ -76,23 +76,23 @@ def website_alive(url):
 def send_email(to_addr, company_name, attachments):
     name = company_name or to_addr
     subject = 'FireGuard – AI Fire Detection & Community Alert System | Sponsorship Request'
-    body_plain = f"""Dear {name},
+    body_plain = f"""Dear **{name}**,
 The project was founded by Ashley Mwaramba, a Grade 12 student, who has been developing the concept since October 2025. I, Nsuku Mareana, a third-year Mechanical & Mechatronics Engineering student at the University of Cape Town, am collaborating with her. Together, we have developed FireGuard – a low-cost, AI-powered early fire detection and community alert system designed specifically for rural and informal settlements in South Africa.
 
-ABOUT THE PROJECT:
+**ABOUT THE PROJECT:**
 FireGuard combines a smoke/gas sensor, an infrared flame sensor, and a precision temperature sensor, feeding their data into a lightweight on‑device AI model. This AI learns the difference between normal cooking smoke and a genuine fire threat, drastically reducing false alarms. When a real fire risk is detected, FireGuard sounds a loud local alarm, flashes high‑intensity LEDs, and simultaneously alerts nearby homes via a low‑power mesh network (ESP‑NOW). A central gateway then sends SMS alerts to community leaders and emergency contacts using a SIM800L GSM module — all without needing internet or mains electricity. The system runs on rechargeable batteries with solar support, making it completely off‑grid.
 
-WHY THIS MATTERS:
+**WHY THIS MATTERS:**
 In informal settlements, fires spread with devastating speed due to overcrowding, highly flammable building materials, and the near-total absence of early warning. By the time smoke is visible, it’s often too late. FireGuard predicts dangerous conditions before ignition, giving families precious extra minutes to escape. Every component has been chosen for affordability and local availability, so a single unit costs a fraction of traditional alarm systems.
 
-HOW YOU CAN HELP:
+**HOW YOU CAN HELP:**
 We are looking for:
 - Expert advice on coding and AI language models suitable for integration with the ESP32 microcontroller
 - Information on different smoke profiles, fire treatments, and detection methods
 - Potential sponsorship which may include access to components, sensors, and software experts in the field of software development
 - Industry connections that could help us test the device in a real‑world environment
 
-📁 Access All Project Files (presentations, technical slides, poster): https://drive.google.com/drive/folders/1fCTv_8V0Cg0h9ubzFe2_LDSpGb_xE_tf?usp=share_link
+📁 **Access All Project Files (presentations, technical slides, poster):** https://drive.google.com/drive/folders/1fCTv_8V0Cg0h9ubzFe2_LDSpGb_xE_tf?usp=share_link
 
 For companies based in Johannesburg / Gauteng: I will be available during the holidays for an in‑person meeting with your team.
 
@@ -108,16 +108,16 @@ Sunday 12:00–17:00
 Thank you for supporting student innovation and community safety.
 
 Warm regards,
-Ashley Mwaramba (Project Founder)
+**Ashley Mwaramba (Project Founder)**
 Phone: 069 625 1572
 LinkedIn: https://www.linkedin.com/in/ashley-mwaramba-04036a269/
 
-Nsuku Mareana (Collaborator)
+**Nsuku Mareana (Collaborator)**
 Phone: 068 078 9360
 LinkedIn: https://www.linkedin.com/in/nsukumareana/"""
 
     body_html = f"""<html><body>
-<p>Dear {name},</p>
+<p>Dear <b>{name}</b>,</p>
 <p>The project was founded by Ashley Mwaramba, a Grade 12 student, who has been developing the concept since October 2025. I, Nsuku Mareana, a third-year Mechanical & Mechatronics Engineering student at the University of Cape Town, am collaborating with her. Together, we have developed FireGuard – a low-cost, AI-powered early fire detection and community alert system designed specifically for rural and informal settlements in South Africa.</p>
 <b>ABOUT THE PROJECT:</b>
 <p>FireGuard combines a smoke/gas sensor, an infrared flame sensor, and a precision temperature sensor, feeding their data into a lightweight on‑device AI model. This AI learns the difference between normal cooking smoke and a genuine fire threat, drastically reducing false alarms. When a real fire risk is detected, FireGuard sounds a loud local alarm, flashes high‑intensity LEDs, and simultaneously alerts nearby homes via a low‑power mesh network (ESP‑NOW). A central gateway then sends SMS alerts to community leaders and emergency contacts using a SIM800L GSM module — all without needing internet or mains electricity. The system runs on rechargeable batteries with solar support, making it completely off‑grid.</p>
@@ -129,7 +129,7 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/"""
 - Information on different smoke profiles, fire treatments, and detection methods<br>
 - Potential sponsorship which may include access to components, sensors, and software experts in the field of software development<br>
 - Industry connections that could help us test the device in a real‑world environment</p>
-<p>📁 <b><a href="https://drive.google.com/drive/folders/1fCTv_8V0Cg0h9ubzFe2_LDSpGb_xE_tf?usp=share_link">Access All Project Files (presentations, technical slides, poster)</a></b></p>
+<p>📁 <b><a href="https://drive.google.com/drive/folders/1fCTv_8V0Cg0h9ubzFe2_LDSpGb_xE_tf?usp=share_link" style="font-weight: bold;">Access All Project Files (presentations, technical slides, poster)</a></b></p>
 <p>For companies based in Johannesburg / Gauteng: I will be available during the holidays for an in‑person meeting with your team.</p>
 <p>My availability for a call or meeting (SAST):<br>
 Monday 07:00–08:30 & 10:00–11:00<br>
@@ -141,10 +141,10 @@ Saturday 08:00–17:00<br>
 Sunday 12:00–17:00</p>
 <p>Thank you for supporting student innovation and community safety.</p>
 <p>Warm regards,<br>
-Ashley Mwaramba (Project Founder)<br>
+<b>Ashley Mwaramba (Project Founder)</b><br>
 Phone: 069 625 1572<br>
 LinkedIn: https://www.linkedin.com/in/ashley-mwaramba-04036a269/</p>
-<p>Nsuku Mareana (Collaborator)<br>
+<p><b>Nsuku Mareana (Collaborator)</b><br>
 Phone: 068 078 9360<br>
 LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
 </body></html>"""
