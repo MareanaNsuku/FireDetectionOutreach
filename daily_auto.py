@@ -234,8 +234,8 @@ def main():
         for row in reader: all_rows.append(row)
 
     for row in batch:
-        company = row['Company Name'].strip()
-        website = row['Website'].strip()
+        company = (row.get('Company Name') or '').strip()
+        website = (row.get('Website') or '').strip()
         print(f'\n🔍 {company} ({website})')
         from urllib.parse import urlparse
         domain = urlparse(website).netloc.replace('www.','').lower()
