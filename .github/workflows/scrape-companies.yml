@@ -6,6 +6,10 @@ on:
     - cron: '0 6 * * *'
     - cron: '0 12 * * *'
 
+concurrency:
+  group: fireguard-scrape
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -54,6 +58,8 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git fetch origin main
+          git pull --rebase --autostash -X ours origin main || true
           git add master_companies.csv data/sent_emails.db attachments
           git commit -m "Add new SA companies and send outreach" || echo "No changes to commit"
-          git push
+          git push origin HEAD:main
