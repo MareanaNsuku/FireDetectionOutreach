@@ -345,7 +345,7 @@ def main():
                 addresses.add(addr)
             verified = [
                 a for a in addresses if has_mx(
-                    a.split('@')[1]) and mailbox_exists(a)]
+                    a.split('@')[1]) ]
             new_emails = [e for e in verified if not is_sent(e)]
             print(
                 f'   {
