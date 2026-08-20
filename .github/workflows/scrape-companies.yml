@@ -50,6 +50,7 @@ jobs:
           EOF
 
       - name: Scrape new South African companies
+        if: github.event_name == 'workflow_dispatch'
         run: python maps_scraper_sa.py
 
       - name: Send outreach
