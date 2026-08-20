@@ -190,19 +190,20 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(overview_file)}"')
         msg.attach(part)
+    try:
+        _smtp_send(PRIMARY_SMTP, msg)
+        return True, 'Gmail'
+    except Exception as primary_err:
+        print(f'     Gmail failed: {primary_err}')
+        if SECONDARY_SMTP.get("user") and SECONDARY_SMTP.get("password"):
+            try:
+                _smtp_send(SECONDARY_SMTP, msg)
+                return True, 'Brevo'
+            except Exception as secondary_err:
+                print(f'     Brevo failed: {secondary_err}')
+                return False, str(secondary_err)
+        return False, str(primary_err)
 
-    for attempt in range(3):
-        try:
-            with smtplib.SMTP(UCT_HOST, UCT_PORT) as s:
-                s.starttls(); s.login(UCT_USER, UCT_PASS); s.send_message(msg)
-            return True, 'UCT'
-        except smtplib.SMTPDataError as e:
-            if '4.4.2' in str(e) and attempt < 2:
-                wait = (attempt + 1) * 10
-                print(f'     rate limit hit, retrying in {wait}s...')
-                time.sleep(wait)
-            else: return False, str(e)
-        except Exception as e: return False, str(e)
     return False, 'max retries'
 
 def load_rejected_domains():
