@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-import os, sys, time, re, sqlite3, smtplib, mimetypes, csv
+import os
+import sys
+import time
+import re
+import sqlite3
+import smtplib
+import mimetypes
+import csv
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -24,14 +31,19 @@ DAILY_BATCH = 30
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; OutreachBot/1.0)'}
 
+
 def init_db():
     conn = sqlite3.connect(SENT_DB)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS sent (email TEXT PRIMARY KEY, date TEXT, bounced INTEGER DEFAULT 0)''')
-    try: c.execute("ALTER TABLE sent ADD COLUMN bounced INTEGER DEFAULT 0")
-    except: pass
+    c.execute(
+        '''CREATE TABLE IF NOT EXISTS sent (email TEXT PRIMARY KEY, date TEXT, bounced INTEGER DEFAULT 0)''')
+    try:
+        c.execute("ALTER TABLE sent ADD COLUMN bounced INTEGER DEFAULT 0")
+    except BaseException:
+        pass
     conn.commit()
     conn.close()
+
 
 def is_sent(email):
     conn = sqlite3.connect(SENT_DB)
@@ -41,37 +53,59 @@ def is_sent(email):
     conn.close()
     return res is not None
 
+
 def mark_sent(email):
     conn = sqlite3.connect(SENT_DB)
     c = conn.cursor()
-    c.execute('INSERT OR IGNORE INTO sent (email, date, bounced) VALUES (?, datetime("now"), 0)', (email,))
+    c.execute(
+        'INSERT OR IGNORE INTO sent (email, date, bounced) VALUES (?, datetime("now"), 0)',
+        (email,
+         ))
     conn.commit()
     conn.close()
 
+
 def has_mx(domain):
-    try: answers = resolver.resolve(domain, 'MX'); return len(answers) > 0
-    except: return False
+    try:
+        answers = resolver.resolve(domain, 'MX')
+        return len(answers) > 0
+    except BaseException:
+        return False
+
 
 def mailbox_exists(email, timeout=10):
     domain = email.split('@')[1]
     try:
         mx_records = resolver.resolve(domain, 'MX')
-        mx_host = sorted([(r.preference, str(r.exchange).rstrip('.')) for r in mx_records])[0][1]
-    except: return False
+        mx_host = sorted([(r.preference, str(r.exchange).rstrip('.'))
+                         for r in mx_records])[0][1]
+    except BaseException:
+        return False
     try:
         server = smtplib.SMTP(mx_host, 25, timeout=timeout)
-        server.helo(); server.mail('test@example.com'); code, msg = server.rcpt(email)
+        server.helo()
+        server.mail('test@example.com')
+        code, msg = server.rcpt(email)
         server.quit()
         return code == 250 or code == 251
-    except: return False
+    except BaseException:
+        return False
+
 
 def website_alive(url):
     try:
-        resp = requests.head(url, headers=HEADERS, timeout=5, allow_redirects=True)
-        if resp.status_code == 200: return True
+        resp = requests.head(
+            url,
+            headers=HEADERS,
+            timeout=5,
+            allow_redirects=True)
+        if resp.status_code == 200:
+            return True
         resp = requests.get(url, headers=HEADERS, timeout=5, stream=True)
         return resp.status_code == 200
-    except: return False
+    except BaseException:
+        return False
+
 
 PRIMARY_SMTP = {
     "host": cfg.get("UCT_SMTP_HOST", "smtp.gmail.com"),
@@ -89,11 +123,13 @@ SECONDARY_SMTP = {
     "from": cfg.get("BRV_FROM_EMAIL") or cfg.get("BRV_SMTP_USER")
 }
 
+
 def _smtp_send(smtp_cfg, msg):
     with smtplib.SMTP(smtp_cfg["host"], smtp_cfg["port"], timeout=30) as server:
         server.starttls()
         server.login(smtp_cfg["user"], smtp_cfg["password"])
         server.send_message(msg)
+
 
 def send_email(to_addr, company_name, attachments):
     name = company_name or to_addr
@@ -176,19 +212,27 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
     msg['To'] = to_addr
     msg['Cc'] = CC_ADDR
     msg['Subject'] = subject
-    msg['X-Priority'] = '1'; msg['Importance'] = 'High'
+    msg['X-Priority'] = '1'
+    msg['Importance'] = 'High'
     msg.attach(MIMEText(body_plain, 'plain', 'utf-8'))
     msg.attach(MIMEText(body_html, 'html', 'utf-8'))
 
-    overview_file = os.path.join(ATTACH_FOLDER, 'FireGuard_Project_Overview.docx')
+    overview_file = os.path.join(
+        ATTACH_FOLDER,
+        'FireGuard_Project_Overview.docx')
     if os.path.isfile(overview_file):
         ctype, encoding = mimetypes.guess_type(overview_file)
-        if ctype is None or encoding is not None: ctype = 'application/octet-stream'
+        if ctype is None or encoding is not None:
+            ctype = 'application/octet-stream'
         maintype, subtype = ctype.split('/', 1)
         with open(overview_file, 'rb') as fp:
-            part = MIMEBase(maintype, subtype); part.set_payload(fp.read())
+            part = MIMEBase(maintype, subtype)
+            part.set_payload(fp.read())
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(overview_file)}"')
+        part.add_header(
+            'Content-Disposition',
+            f'attachment; filename="{
+                os.path.basename(overview_file)}"')
         msg.attach(part)
     try:
         _smtp_send(PRIMARY_SMTP, msg)
@@ -206,26 +250,34 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
 
     return False, 'max retries'
 
+
 def load_rejected_domains():
     domains = set()
     try:
         with open('rejected_domains.txt', 'r') as f:
-            for line in f: domains.add(line.strip().lower())
-    except: pass
+            for line in f:
+                domains.add(line.strip().lower())
+    except BaseException:
+        pass
     return domains
+
 
 def load_responded_domains():
     domains = set()
     try:
         with open('responded_domains.txt', 'r') as f:
-            for line in f: domains.add(line.strip().lower())
-    except: pass
+            for line in f:
+                domains.add(line.strip().lower())
+    except BaseException:
+        pass
     return domains
+
 
 def main():
     init_db()
     if not os.path.exists(MASTER_CSV):
-        print(f'❌ {MASTER_CSV} not found. Run the discovery bot first (python live_scraper.py).')
+        print(
+            f'❌ {MASTER_CSV} not found. Run the discovery bot first (python live_scraper.py).')
         sys.exit(1)
     rejected = load_rejected_domains()
     responded = load_responded_domains()
@@ -235,7 +287,8 @@ def main():
     with open(MASTER_CSV, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            if not (row.get('Status') or '').strip(): rows.append(row)
+            if not (row.get('Status') or '').strip():
+                rows.append(row)
 
     if not rows:
         print('✅ All companies processed. Run live_scraper.py again for fresh companies.')
@@ -246,7 +299,8 @@ def main():
 
     attachments = []
     overview = os.path.join(ATTACH_FOLDER, 'FireGuard_Project_Overview.docx')
-    if os.path.isfile(overview): attachments.append(overview)
+    if os.path.isfile(overview):
+        attachments.append(overview)
     print(f'📎 {len(attachments)} attachment(s) ready.')
 
     total_sent = 0
@@ -254,23 +308,26 @@ def main():
     with open(MASTER_CSV, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
-        for row in reader: all_rows.append(row)
+        for row in reader:
+            all_rows.append(row)
 
     for row in batch:
         company = (row.get('Company Name') or '').strip()
         website = (row.get('Website') or '').strip()
         print(f'\n🔍 {company} ({website})')
         from urllib.parse import urlparse
-        domain = urlparse(website).netloc.replace('www.','').lower()
+        domain = urlparse(website).netloc.replace('www.', '').lower()
         if domain in excluded:
             print('   ⏭️  already contacted/rejected – skipping.')
             for r in all_rows:
-                if r['Website'] == website and r['Company Name'] == company: r['Status'] = 'skipped'
+                if r['Website'] == website and r['Company Name'] == company:
+                    r['Status'] = 'skipped'
             continue
         if not website_alive(website):
             print('   ❌ website not reachable, skipping.')
             for r in all_rows:
-                if r['Website'] == website and r['Company Name'] == company: r['Status'] = 'no website'
+                if r['Website'] == website and r['Company Name'] == company:
+                    r['Status'] = 'no website'
             continue
 
         emails = scrape_emails(website)
@@ -278,15 +335,22 @@ def main():
         if emails:
             print(f'   scraped: {emails}')
             for r in all_rows:
-                if r['Website'] == website and r['Company Name'] == company: r['Emails Found'] = emails
+                if r['Website'] == website and r['Company Name'] == company:
+                    r['Emails Found'] = emails
             addresses = set()
             for addr in emails.split(','):
                 addr = addr.strip()
-                if not addr or '@' not in addr: continue
+                if not addr or '@' not in addr:
+                    continue
                 addresses.add(addr)
-            verified = [a for a in addresses if has_mx(a.split('@')[1]) and mailbox_exists(a)]
+            verified = [
+                a for a in addresses if has_mx(
+                    a.split('@')[1]) and mailbox_exists(a)]
             new_emails = [e for e in verified if not is_sent(e)]
-            print(f'   {len(verified)} mailboxes confirmed, {len(new_emails)} new')
+            print(
+                f'   {
+                    len(verified)} mailboxes confirmed, {
+                    len(new_emails)} new')
             all_sent = True
             for email in new_emails:
                 success, method = send_email(email, company, attachments)
@@ -300,7 +364,8 @@ def main():
                 time.sleep(15)
             status = 'done' if all_sent else ''
             for r in all_rows:
-                if r['Website'] == website and r['Company Name'] == company: r['Status'] = status
+                if r['Website'] == website and r['Company Name'] == company:
+                    r['Status'] = status
         else:
             print('   no emails found')
             for r in all_rows:
@@ -313,7 +378,11 @@ def main():
             writer.writeheader()
             writer.writerows(all_rows)
 
-    print(f'\n🎉 Done! Sent {total_sent} new emails today. {len(rows)-len(batch)} companies remaining.')
+    print(
+        f'\n🎉 Done! Sent {total_sent} new emails today. {
+            len(rows) -
+            len(batch)} companies remaining.')
+
 
 if __name__ == '__main__':
     main()
