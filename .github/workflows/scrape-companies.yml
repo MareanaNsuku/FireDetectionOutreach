@@ -42,6 +42,11 @@ jobs:
           UCT_PASSWORD=${{ secrets.UCT_PASSWORD }}
           UCT_SMTP_HOST=smtp.gmail.com
           UCT_SMTP_PORT=587
+          BRV_SMTP_HOST=${{ secrets.BRV_SMTP_HOST }}
+          BRV_SMTP_PORT=${{ secrets.BRV_SMTP_PORT }}
+          BRV_SMTP_USER=${{ secrets.BRV_SMTP_USER }}
+          BRV_SMTP_PASS=${{ secrets.BRV_SMTP_PASS }}
+          BRV_FROM_EMAIL=${{ secrets.BRV_FROM_EMAIL }}
           EOF
 
       - name: Scrape new South African companies

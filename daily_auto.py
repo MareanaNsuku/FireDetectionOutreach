@@ -73,6 +73,28 @@ def website_alive(url):
         return resp.status_code == 200
     except: return False
 
+PRIMARY_SMTP = {
+    "host": cfg.get("UCT_SMTP_HOST", "smtp.gmail.com"),
+    "port": int(cfg.get("UCT_SMTP_PORT", "587")),
+    "user": cfg.get("UCT_EMAIL"),
+    "password": cfg.get("UCT_PASSWORD"),
+    "from": cfg.get("UCT_EMAIL")
+}
+
+SECONDARY_SMTP = {
+    "host": cfg.get("BRV_SMTP_HOST", "smtp-relay.brevo.com"),
+    "port": int(cfg.get("BRV_SMTP_PORT", "587")),
+    "user": cfg.get("BRV_SMTP_USER"),
+    "password": cfg.get("BRV_SMTP_PASS"),
+    "from": cfg.get("BRV_FROM_EMAIL") or cfg.get("BRV_SMTP_USER")
+}
+
+def _smtp_send(smtp_cfg, msg):
+    with smtplib.SMTP(smtp_cfg["host"], smtp_cfg["port"], timeout=30) as server:
+        server.starttls()
+        server.login(smtp_cfg["user"], smtp_cfg["password"])
+        server.send_message(msg)
+
 def send_email(to_addr, company_name, attachments):
     name = company_name or to_addr
     subject = 'FireGuard – AI Fire Detection & Community Alert System | Sponsorship Request'
@@ -169,17 +191,19 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
         part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(overview_file)}"')
         msg.attach(part)
 
-    for attempt in range(3):
-        try:
-            with smtplib.SMTP(UCT_HOST, UCT_PORT) as s:
-                s.starttls(); s.login(UCT_USER, UCT_PASS); s.send_message(msg)
-            return True, 'UCT'
-        except smtplib.SMTPDataError as e:
-            if '4.4.2' in str(e) and attempt < 2:
-                wait = (attempt + 1) * 10
-                print(f'     rate limit hit, retrying in {wait}s...')
-                time.sleep(wait)
-            else: return False, str(e)
+            try:
+            _smtp_send(PRIMARY_SMTP, msg)
+            return True, 'Gmail'
+        except Exception as primary_err:
+            print(f'     Gmail failed: {primary_err}')
+            if SECONDARY_SMTP.get("user") and SECONDARY_SMTP.get("password"):
+                try:
+                    _smtp_send(SECONDARY_SMTP, msg)
+                    return True, 'Brevo'
+                except Exception as secondary_err:
+                    print(f'     Brevo failed: {secondary_err}')
+                    return False, str(secondary_err)
+            return False, str(primary_err)
         except Exception as e: return False, str(e)
     return False, 'max retries'
 
