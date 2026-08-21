@@ -3,21 +3,32 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 LOCATIONS = [
-    "Johannesburg", "Cape Town", "Durban", "Pretoria", "Gqeberha", "East London",
-    "Bloemfontein", "Polokwane", "Mbombela", "Kimberley", "Rustenburg",
-    "Pietermaritzburg", "George", "Stellenbosch", "Knysna", "Richards Bay",
-    "Witbank", "Potchefstroom", "Klerksdorp", "Welkom", "Vanderbijlpark",
-    "Soweto", "Khayelitsha", "Mitchells Plain", "Mamelodi"
+    "Johannesburg", "Cape Town", "Durban", "Pretoria", "Gqeberha",
+    "East London", "Bloemfontein", "Polokwane", "Mbombela", "Kimberley",
+    "Rustenburg", "Pietermaritzburg", "George", "Stellenbosch", "Knysna",
+    "Richards Bay", "Witbank", "Potchefstroom", "Klerksdorp", "Welkom",
+    "Vanderbijlpark", "Soweto", "Khayelitsha", "Mitchells Plain", "Mamelodi",
+    "Centurion", "Midrand", "Sandton", "Randburg", "Roodepoort",
+    "Krugersdorp", "Benoni", "Boksburg", "Alberton", "Germiston",
+    "Springs", "Vereeniging", "Sasolburg", "Paarl", "Worcester"
 ]
+
 
 CATEGORIES = [
     "fire detection company",
     "fire protection services",
     "security systems company",
-    "software development company"
+    "software development company",
+    "embedded systems company",
+    "IoT company",
+    "electronics engineering firm",
+    "venture capital firm",
+    "angel investor network",
+    "product design company"
 ]
 
-MAX_PER_QUERY = 5
+
+MAX_PER_QUERY = 8
 MASTER_CSV = "master_companies.csv"
 
 def accept_consent(page):
@@ -127,8 +138,9 @@ def main():
                     print("  ⚠️ No main result cards, waiting 6s anyway")
                     page.wait_for_timeout(6000)
                 try:
-                    page.mouse.wheel(0, 1500)
-                    page.wait_for_timeout(1500)
+                    for _ in range(4):
+                        page.mouse.wheel(0, 2000)
+                        page.wait_for_timeout(1000)
                 except:
                     pass
                 results = extract_via_clicks(page, max_results=MAX_PER_QUERY)
