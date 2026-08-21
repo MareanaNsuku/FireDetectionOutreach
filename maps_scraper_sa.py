@@ -14,6 +14,7 @@ LOCATIONS = [
 ]
 
 
+
 CATEGORIES = [
     "fire detection company",
     "fire protection services",
@@ -26,6 +27,7 @@ CATEGORIES = [
     "angel investor network",
     "product design company"
 ]
+
 
 
 MAX_PER_QUERY = 8
