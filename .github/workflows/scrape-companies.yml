@@ -52,6 +52,9 @@ jobs:
       - name: Scrape new South African companies
         run: python maps_scraper_sa.py
 
+      - name: Check bounced emails
+        run: python bounce_checker.py || echo "Bounce checker failed; continuing"
+
       - name: Send outreach
         run: |
           for i in 1 2 3 4; do

@@ -45,6 +45,15 @@ def init_db():
     conn.close()
 
 
+def is_bounced(email):
+    email = email.lower()
+    conn = sqlite3.connect(SENT_DB)
+    c = conn.cursor()
+    c.execute('SELECT bounced FROM sent WHERE email=?', (email,))
+    row = c.fetchone()
+    conn.close()
+    return bool(row and row[0])
+
 def is_sent(email):
     conn = sqlite3.connect(SENT_DB)
     c = conn.cursor()
@@ -346,7 +355,7 @@ def main():
             verified = [
                 a for a in addresses if has_mx(
                     a.split('@')[1]) ]
-            new_emails = [e for e in verified if not is_sent(e)]
+            new_emails = [e for e in verified if not is_sent(e) and not is_bounced(e)]
             print(
                 f'   {
                     len(verified)} mailboxes confirmed, {
