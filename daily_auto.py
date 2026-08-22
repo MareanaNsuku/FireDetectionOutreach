@@ -2,6 +2,8 @@
 import os
 import sys
 import time
+import base64
+import json
 import re
 import sqlite3
 import smtplib
@@ -129,7 +131,8 @@ SECONDARY_SMTP = {
     "port": int(cfg.get("BRV_SMTP_PORT", "587")),
     "user": cfg.get("BRV_SMTP_USER"),
     "password": cfg.get("BRV_SMTP_PASS"),
-    "from": cfg.get("BRV_FROM_EMAIL") or cfg.get("BRV_SMTP_USER")
+    "from": cfg.get("BRV_FROM_EMAIL") or cfg.get("BRV_SMTP_USER"),
+    "api_key": cfg.get("BRV_API_KEY")
 }
 
 
@@ -139,6 +142,40 @@ def _smtp_send(smtp_cfg, msg):
         server.login(smtp_cfg["user"], smtp_cfg["password"])
         server.send_message(msg)
 
+
+
+
+def _brevo_api_send(cfg, to_addr, subject, text_content, html_content, attachment_path):
+    api_key = cfg.get("api_key")
+    if not api_key:
+        return False
+    sender_email = cfg.get("from") or cfg.get("user")
+    payload = {
+        "sender": {"email": sender_email},
+        "to": [{"email": to_addr}],
+        "subject": subject,
+        "textContent": text_content,
+        "htmlContent": html_content
+    }
+    if attachment_path and Path(attachment_path).exists():
+        with open(attachment_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+        payload["attachment"] = [{
+            "content": encoded,
+            "name": Path(attachment_path).name
+        }]
+    headers = {
+        "api-key": api_key,
+        "Content-Type": "application/json"
+    }
+    try:
+        resp = requests.post("https://api.brevo.com/v3/smtp/email", headers=headers, json=payload, timeout=30)
+        if resp.status_code in (200, 201):
+            return True
+        print(f"     Brevo API failed: {resp.status_code} {resp.text[:200]}")
+    except Exception as e:
+        print(f"     Brevo API error: {e}")
+    return False
 
 def send_email(to_addr, company_name, attachments):
     name = company_name or to_addr
@@ -253,8 +290,10 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
                 _smtp_send(SECONDARY_SMTP, msg)
                 return True, 'Brevo'
             except Exception as secondary_err:
-                print(f'     Brevo failed: {secondary_err}')
-                return False, str(secondary_err)
+                    print(f'     Brevo SMTP failed: {secondary_err}')
+                    if _brevo_api_send(SECONDARY_SMTP, to_addr, subject, body_plain, body_html, overview_file):
+                        return True, 'BrevoAPI'
+                    return False, str(secondary_err)
         return False, str(primary_err)
 
     return False, 'max retries'

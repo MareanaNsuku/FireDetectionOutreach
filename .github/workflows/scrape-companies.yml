@@ -47,6 +47,7 @@ jobs:
           BRV_SMTP_USER=${{ secrets.BRV_SMTP_USER }}
           BRV_SMTP_PASS=${{ secrets.BRV_SMTP_PASS }}
           BRV_FROM_EMAIL=${{ secrets.BRV_FROM_EMAIL }}
+          BRV_API_KEY=${{ secrets.BRV_API_KEY }}
           EOF
 
       - name: Scrape new South African companies
