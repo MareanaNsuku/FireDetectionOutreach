@@ -196,7 +196,7 @@ We are looking for:
 - Potential sponsorship which may include access to components, sensors, and software experts in the field of software development
 - Industry connections that could help us test the device in a real‑world environment
 
-📁 **Access All Project Files (presentations, technical slides, poster):** https://drive.google.com/drive/folders/1fCTv_8V0Cg0h9ubzFe2_LDSpGb_xE_tf?usp=share_link
+📁 **Access All Project Files (presentations, technical slides, poster):** https://drive.google.com/drive/folders/1dLSXFE-GMi38XNnMAVtw1_KkS38SVUIJ?usp=sharing
 
 For companies based in Johannesburg / Gauteng: I will be available during the holidays for an in‑person meeting with your team.
 
@@ -233,7 +233,7 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/"""
 - Information on different smoke profiles, fire treatments, and detection methods<br>
 - Potential sponsorship which may include access to components, sensors, and software experts in the field of software development<br>
 - Industry connections that could help us test the device in a real‑world environment</p>
-<p>📁 <b><a href="https://drive.google.com/drive/folders/1fCTv_8V0Cg0h9ubzFe2_LDSpGb_xE_tf?usp=share_link" style="font-weight: bold;">Access All Project Files (presentations, technical slides, poster)</a></b></p>
+<p>📁 <b><a href="https://drive.google.com/drive/folders/1dLSXFE-GMi38XNnMAVtw1_KkS38SVUIJ?usp=sharing" style="font-weight: bold;">Access All Project Files (presentations, technical slides, poster)</a></b></p>
 <p>For companies based in Johannesburg / Gauteng: I will be available during the holidays for an in‑person meeting with your team.</p>
 <p>My availability for a call or meeting (SAST):<br>
 Monday 07:00–08:30 & 10:00–11:00<br>
