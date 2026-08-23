@@ -58,7 +58,7 @@ jobs:
 
       - name: Send outreach
         run: |
-          for i in 1 2 3 4; do
+          for i in 1 2; do
             python daily_auto.py
           done
 

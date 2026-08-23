@@ -29,7 +29,7 @@ CC_ADDR = 'ashleymwaramba@gmail.com'
 ATTACH_FOLDER = 'attachments'
 SENT_DB = 'data/sent_emails.db'
 MASTER_CSV = 'master_companies.csv'
-DAILY_BATCH = 30
+DAILY_BATCH = 20
 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; OutreachBot/1.0)'}
 
