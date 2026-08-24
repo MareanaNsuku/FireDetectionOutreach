@@ -1,0 +1,39 @@
+name: Send Referral Emails Once
+
+on:
+  schedule:
+    # 07:00 SAST = 05:00 UTC on 25 August 2026
+    - cron: '0 5 25 8 *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send-referral:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Create .env
+        run: |
+          cat > .env <<EOF
+          UCT_EMAIL=${{ secrets.UCT_EMAIL }}
+          UCT_PASSWORD=${{ secrets.UCT_PASSWORD }}
+          UCT_SMTP_HOST=smtp.gmail.com
+          UCT_SMTP_PORT=587
+          EOF
+
+      - name: Send referral emails
+        run: python send_referral_emails.py
