@@ -124,7 +124,39 @@ for criterion, value in search_queries:
 
 M.logout()
 
-clean_failed = {a for a in failed if a not in EXCLUDE}
+
+PLACEHOLDER_DOMAINS = {
+    'example.com', 'example.org', 'example.net',
+    'test.com', 'domain.com', 'mailinator.com',
+    'yopmail.com', 'tempmail.com', 'guerrillamail.com',
+    'sharklasers.com', '10minutemail.com', 'throwawaymail.com',
+    'maildrop.cc', 'dispostable.com', 'mailcatch.com',
+    'mailinator.net', 'mailinator.org'
+}
+
+def is_placeholder(email):
+    if '@' not in email:
+        return True
+    local, domain = email.rsplit('@', 1)
+    local = local.lower().strip()
+    domain = domain.lower().strip()
+
+    if domain in PLACEHOLDER_DOMAINS:
+        return True
+
+    if local.startswith('www.') or local == 'www':
+        return True
+
+    if local in {'you', 'your', 'user', 'test', 'example', 'sample',
+                 'placeholder', 'email', 'company', 'john', 'jane',
+                 'someone', 'name', 'firstname', 'lastname', 'support',
+                 'info', 'admin', 'contact', 'mail', 'no-reply',
+                 'noreply', 'owner', 'webmaster', 'postmaster'}:
+        return True
+
+    return False
+
+clean_failed = {a for a in failed if a not in EXCLUDE and not is_placeholder(a)}
 
 if not clean_failed:
     print('Bounce checker: no new bounced addresses')
