@@ -55,13 +55,8 @@ for num in sent_ids:
         msg = email.message_from_bytes(raw)
         subject = decode_mime(msg.get('Subject', ''))
 
-        # Check if archived: look for "Inbox" label in X-GM-LABELS
-        labels_line = msg_data[0][0].decode('utf-8', 'ignore')
-        is_archived = '\\Inbox' not in labels_line
-
-        if is_archived:
-            skipped_archived += 1
-            continue
+        # Only delete emails older than 7 days to avoid deleting very recent sends
+        # Skip archived detection since sent emails never have Inbox label
 
         # Check for a reply in All Mail with subject "Re: ..."
         reply_subject = f"Re: {subject}"
