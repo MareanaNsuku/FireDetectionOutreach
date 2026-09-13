@@ -1,7 +1,9 @@
 import imaplib
 import email
 import sys
+from datetime import datetime, timezone
 from email.header import decode_header
+from email.utils import parsedate_to_datetime
 from dotenv import dotenv_values
 
 cfg = dotenv_values('.env')
@@ -31,10 +33,7 @@ except Exception as e:
     print('Cleanup IMAP login failed:', e)
     sys.exit(0)
 
-# Select Sent Mail
 M.select('"[Gmail]/Sent Mail"')
-
-# Find FireGuard sent emails
 typ, data = M.search(None, 'SUBJECT', '"FireGuard"')
 if typ != 'OK':
     print('Cleanup: search failed')
@@ -43,22 +42,35 @@ if typ != 'OK':
 
 sent_ids = data[0].split()
 deleted = 0
-skipped_archived = 0
 skipped_replied = 0
+skipped_recent = 0
+
+now = datetime.now(timezone.utc)
 
 for num in sent_ids:
     try:
-        typ, msg_data = M.fetch(num, '(RFC822 X-GM-LABELS)')
+        typ, msg_data = M.fetch(num, '(RFC822)')
         if typ != 'OK':
             continue
-        raw = msg_data[0][1]
-        msg = email.message_from_bytes(raw)
+        msg = email.message_from_bytes(msg_data[0][1])
         subject = decode_mime(msg.get('Subject', ''))
+        date_str = msg.get('Date')
+        if not date_str:
+            continue
 
-        # Only delete emails older than 7 days to avoid deleting very recent sends
-        # Skip archived detection since sent emails never have Inbox label
+        try:
+            sent_date = parsedate_to_datetime(date_str)
+        except Exception:
+            continue
 
-        # Check for a reply in All Mail with subject "Re: ..."
+        if sent_date.tzinfo is None:
+            sent_date = sent_date.replace(tzinfo=timezone.utc)
+
+        days_since = (now - sent_date).days
+        if days_since < 2:
+            skipped_recent += 1
+            continue
+
         reply_subject = f"Re: {subject}"
         M2 = imaplib.IMAP4_SSL('imap.gmail.com', 993)
         M2.login(user, password)
@@ -70,7 +82,6 @@ for num in sent_ids:
             skipped_replied += 1
             continue
 
-        # No reply and not archived -> delete
         M.store(num, '+FLAGS', '\\Deleted')
         deleted += 1
     except Exception as e:
@@ -79,6 +90,6 @@ for num in sent_ids:
 M.expunge()
 M.logout()
 
-print(f'Cleanup: deleted {deleted} unreplied sent emails')
+print(f'Cleanup: deleted {deleted} unreplied sent emails older than 2 days')
 print(f'Cleanup: kept {skipped_replied} sent emails that had replies')
-print(f'Cleanup: skipped {skipped_archived} archived sent emails')
+print(f'Cleanup: kept {skipped_recent} recent sent emails (less than 2 days old)')
