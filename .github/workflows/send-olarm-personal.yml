@@ -1,0 +1,36 @@
+name: Send Olarm Personal Outreach Once
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send-olarm-personal:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install python-dotenv
+
+      - name: Create .env
+        run: |
+          cat > .env <<EOF
+          UCT_EMAIL=${{ secrets.UCT_EMAIL }}
+          UCT_PASSWORD=${{ secrets.UCT_PASSWORD }}
+          UCT_SMTP_HOST=smtp.gmail.com
+          UCT_SMTP_PORT=587
+          EOF
+
+      - name: Send Olarm personal outreach emails
+        run: python send_olarm_personal.py
