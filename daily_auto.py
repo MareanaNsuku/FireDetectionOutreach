@@ -1,123 +1,30 @@
-#!/usr/bin/env python3
 import os
-import sys
+import csv
 import time
-import base64
-import json
 import re
 import sqlite3
 import smtplib
 import mimetypes
-import csv
-from pathlib import Path
+import base64
+import json
+import requests
+from email.message import EmailMessage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from urllib.parse import urlparse
+from pathlib import Path
 from dotenv import dotenv_values
-from dns import resolver, exception
-import requests
+import dns.resolver
+
+# Import the email scraper from your company_finder folder
 from company_finder.email_utils import scrape_emails
 
+# ---------- Configuration ----------
 cfg = dotenv_values('.env')
-UCT_USER = cfg.get('UCT_EMAIL')
-UCT_PASS = cfg.get('UCT_PASSWORD')
-UCT_HOST = cfg.get('UCT_SMTP_HOST', 'smtp.uct.ac.za')
-UCT_PORT = int(cfg.get('UCT_SMTP_PORT', '587'))
-FROM_EMAIL = UCT_USER
-CC_ADDR = 'ashleymwaramba@gmail.com'
-ATTACH_FOLDER = 'attachments'
-SENT_DB = 'data/sent_emails.db'
-MASTER_CSV = 'master_companies.csv'
-DAILY_BATCH = 20
 
-HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; OutreachBot/1.0)'}
-
-
-def init_db():
-    conn = sqlite3.connect(SENT_DB)
-    c = conn.cursor()
-    c.execute(
-        '''CREATE TABLE IF NOT EXISTS sent (email TEXT PRIMARY KEY, date TEXT, bounced INTEGER DEFAULT 0)''')
-    try:
-        c.execute("ALTER TABLE sent ADD COLUMN bounced INTEGER DEFAULT 0")
-    except BaseException:
-        pass
-    conn.commit()
-    conn.close()
-
-
-def is_bounced(email):
-    email = email.lower()
-    conn = sqlite3.connect(SENT_DB)
-    c = conn.cursor()
-    c.execute('SELECT bounced FROM sent WHERE email=?', (email,))
-    row = c.fetchone()
-    conn.close()
-    return bool(row and row[0])
-
-def is_sent(email):
-    conn = sqlite3.connect(SENT_DB)
-    c = conn.cursor()
-    c.execute('SELECT 1 FROM sent WHERE email=?', (email,))
-    res = c.fetchone()
-    conn.close()
-    return res is not None
-
-
-def mark_sent(email):
-    conn = sqlite3.connect(SENT_DB)
-    c = conn.cursor()
-    c.execute(
-        'INSERT OR IGNORE INTO sent (email, date, bounced) VALUES (?, datetime("now"), 0)',
-        (email,
-         ))
-    conn.commit()
-    conn.close()
-
-
-def has_mx(domain):
-    try:
-        answers = resolver.resolve(domain, 'MX')
-        return len(answers) > 0
-    except BaseException:
-        return False
-
-
-def mailbox_exists(email, timeout=10):
-    domain = email.split('@')[1]
-    try:
-        mx_records = resolver.resolve(domain, 'MX')
-        mx_host = sorted([(r.preference, str(r.exchange).rstrip('.'))
-                         for r in mx_records])[0][1]
-    except BaseException:
-        return False
-    try:
-        server = smtplib.SMTP(mx_host, 25, timeout=timeout)
-        server.helo()
-        server.mail('test@example.com')
-        code, msg = server.rcpt(email)
-        server.quit()
-        return code == 250 or code == 251
-    except BaseException:
-        return False
-
-
-def website_alive(url):
-    try:
-        resp = requests.head(
-            url,
-            headers=HEADERS,
-            timeout=5,
-            allow_redirects=True)
-        if resp.status_code == 200:
-            return True
-        resp = requests.get(url, headers=HEADERS, timeout=5, stream=True)
-        return resp.status_code == 200
-    except BaseException:
-        return False
-
-
+# Primary SMTP (Gmail)
 PRIMARY_SMTP = {
     "host": cfg.get("UCT_SMTP_HOST", "smtp.gmail.com"),
     "port": int(cfg.get("UCT_SMTP_PORT", "587")),
@@ -126,6 +33,7 @@ PRIMARY_SMTP = {
     "from": cfg.get("UCT_EMAIL")
 }
 
+# Secondary SMTP (Brevo)
 SECONDARY_SMTP = {
     "host": cfg.get("BRV_SMTP_HOST", "smtp-relay.brevo.com"),
     "port": int(cfg.get("BRV_SMTP_PORT", "587")),
@@ -135,15 +43,82 @@ SECONDARY_SMTP = {
     "api_key": cfg.get("BRV_API_KEY")
 }
 
+MASTER_CSV = "master_companies.csv"
+SENT_DB = "data/sent_emails.db"
+ATTACH_FOLDER = "attachments"
+DAILY_BATCH = 20
+CC_ADDR = "ashleymwaramba@gmail.com"
+HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 
+# ---------- Database & Verification Helpers ----------
+def init_db():
+    Path("data").mkdir(exist_ok=True)
+    conn = sqlite3.connect(SENT_DB)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS sent (email TEXT PRIMARY KEY, date TEXT, bounced INTEGER DEFAULT 0)''')
+    try: c.execute("ALTER TABLE sent ADD COLUMN bounced INTEGER DEFAULT 0")
+    except: pass
+    conn.commit()
+    conn.close()
+
+def is_sent(email):
+    conn = sqlite3.connect(SENT_DB)
+    c = conn.cursor()
+    c.execute('SELECT 1 FROM sent WHERE email=?', (email,))
+    row = c.fetchone()
+    conn.close()
+    return bool(row)
+
+def is_bounced(email):
+    conn = sqlite3.connect(SENT_DB)
+    c = conn.cursor()
+    c.execute('SELECT bounced FROM sent WHERE email=?', (email,))
+    row = c.fetchone()
+    conn.close()
+    return bool(row and row[0])
+
+def mark_sent(email):
+    conn = sqlite3.connect(SENT_DB)
+    c = conn.cursor()
+    c.execute('INSERT OR IGNORE INTO sent (email, date, bounced) VALUES (?, datetime("now"), 0)', (email,))
+    conn.commit()
+    conn.close()
+
+def has_mx(domain):
+    try:
+        dns.resolver.resolve(domain, 'MX')
+        return True
+    except:
+        return False
+
+def website_alive(url):
+    try:
+        resp = requests.head(url, headers=HEADERS, timeout=5, allow_redirects=True)
+        if resp.status_code == 200: return True
+        resp = requests.get(url, headers=HEADERS, timeout=5, stream=True)
+        return resp.status_code == 200
+    except:
+        return False
+
+# ---------- Sending Logic ----------
 def _smtp_send(smtp_cfg, msg):
-    with smtplib.SMTP(smtp_cfg["host"], smtp_cfg["port"], timeout=30) as server:
-        server.starttls()
-        server.login(smtp_cfg["user"], smtp_cfg["password"])
-        server.send_message(msg)
-
-
-
+    # Try Port 587 (STARTTLS) first
+    try:
+        with smtplib.SMTP(smtp_cfg["host"], smtp_cfg["port"], timeout=30) as server:
+            server.starttls()
+            server.login(smtp_cfg["user"], smtp_cfg["password"])
+            server.send_message(msg)
+            return
+    except Exception as e:
+        print(f"     Port {smtp_cfg['port']} failed. Trying Port 465 (SSL)...")
+        
+    # Fallback to Port 465 (SSL)
+    try:
+        with smtplib.SMTP_SSL(smtp_cfg["host"], 465, timeout=30) as server:
+            server.login(smtp_cfg["user"], smtp_cfg["password"])
+            server.send_message(msg)
+    except Exception as e:
+        raise Exception(f"Both SMTP ports failed: {e}")
 
 def _brevo_api_send(cfg, to_addr, subject, text_content, html_content, attachment_path):
     api_key = cfg.get("api_key")
@@ -164,10 +139,7 @@ def _brevo_api_send(cfg, to_addr, subject, text_content, html_content, attachmen
             "content": encoded,
             "name": Path(attachment_path).name
         }]
-    headers = {
-        "api-key": api_key,
-        "Content-Type": "application/json"
-    }
+    headers = {"api-key": api_key, "Content-Type": "application/json"}
     try:
         resp = requests.post("https://api.brevo.com/v3/smtp/email", headers=headers, json=payload, timeout=30)
         if resp.status_code in (200, 201):
@@ -180,23 +152,24 @@ def _brevo_api_send(cfg, to_addr, subject, text_content, html_content, attachmen
 def send_email(to_addr, company_name, attachments):
     name = company_name or to_addr
     subject = 'FireGuard – AI Fire Detection & Community Alert System | Sponsorship Request'
-    body_plain = f"""Dear **{name}**,
+    
+    body_plain = f"""Dear {name},
 The project was founded by Ashley Mwaramba, a Grade 12 student, who has been developing the concept since October 2025. I, Nsuku Mareana, a third-year Mechanical & Mechatronics Engineering student at the University of Cape Town, am collaborating with her. Together, we have developed FireGuard – a low-cost, AI-powered early fire detection and community alert system designed specifically for rural and informal settlements in South Africa.
 
-**ABOUT THE PROJECT:**
+ABOUT THE PROJECT:
 FireGuard combines a smoke/gas sensor, an infrared flame sensor, and a precision temperature sensor, feeding their data into a lightweight on‑device AI model. This AI learns the difference between normal cooking smoke and a genuine fire threat, drastically reducing false alarms. When a real fire risk is detected, FireGuard sounds a loud local alarm, flashes high‑intensity LEDs, and simultaneously alerts nearby homes via a low‑power mesh network (ESP‑NOW). A central gateway then sends SMS alerts to community leaders and emergency contacts using a SIM800L GSM module — all without needing internet or mains electricity. The system runs on rechargeable batteries with solar support, making it completely off‑grid.
 
-**WHY THIS MATTERS:**
+WHY THIS MATTERS:
 In informal settlements, fires spread with devastating speed due to overcrowding, highly flammable building materials, and the near-total absence of early warning. By the time smoke is visible, it’s often too late. FireGuard predicts dangerous conditions before ignition, giving families precious extra minutes to escape. Every component has been chosen for affordability and local availability, so a single unit costs a fraction of traditional alarm systems.
 
-**HOW YOU CAN HELP:**
+HOW YOU CAN HELP:
 We are looking for:
 - Expert advice on coding and AI language models suitable for integration with the ESP32 microcontroller
 - Information on different smoke profiles, fire treatments, and detection methods
 - Potential sponsorship which may include access to components, sensors, and software experts in the field of software development
 - Industry connections that could help us test the device in a real‑world environment
 
-📁 **Access All Project Files (presentations, technical slides, poster):** https://drive.google.com/drive/folders/1dLSXFE-GMi38XNnMAVtw1_KkS38SVUIJ?usp=sharing
+📁 Access All Project Files (presentations, technical slides, poster): https://drive.google.com/drive/folders/1dLSXFE-GMi38XNnMAVtw1_KkS38SVUIJ?usp=sharing
 
 For companies based in Johannesburg / Gauteng: I will be available during the holidays for an in‑person meeting with your team.
 
@@ -212,28 +185,28 @@ Sunday 12:00–17:00
 Thank you for supporting student innovation and community safety.
 
 Warm regards,
-**Ashley Mwaramba (Project Founder)**
+Ashley Mwaramba (Project Founder)
 Phone: 069 625 1572
 LinkedIn: https://www.linkedin.com/in/ashley-mwaramba-04036a269/
 
-**Nsuku Mareana (Collaborator)**
+Nsuku Mareana (Collaborator)
 Phone: 068 078 9360
 LinkedIn: https://www.linkedin.com/in/nsukumareana/"""
 
     body_html = f"""<html><body>
 <p>Dear <b>{name}</b>,</p>
 <p>The project was founded by Ashley Mwaramba, a Grade 12 student, who has been developing the concept since October 2025. I, Nsuku Mareana, a third-year Mechanical & Mechatronics Engineering student at the University of Cape Town, am collaborating with her. Together, we have developed FireGuard – a low-cost, AI-powered early fire detection and community alert system designed specifically for rural and informal settlements in South Africa.</p>
-<b>ABOUT THE PROJECT:</b>
-<p>FireGuard combines a smoke/gas sensor, an infrared flame sensor, and a precision temperature sensor, feeding their data into a lightweight on‑device AI model. This AI learns the difference between normal cooking smoke and a genuine fire threat, drastically reducing false alarms. When a real fire risk is detected, FireGuard sounds a loud local alarm, flashes high‑intensity LEDs, and simultaneously alerts nearby homes via a low‑power mesh network (ESP‑NOW). A central gateway then sends SMS alerts to community leaders and emergency contacts using a SIM800L GSM module — all without needing internet or mains electricity. The system runs on rechargeable batteries with solar support, making it completely off‑grid.</p>
-<b>WHY THIS MATTERS:</b>
-<p>In informal settlements, fires spread with devastating speed due to overcrowding, highly flammable building materials, and the near-total absence of early warning. By the time smoke is visible, it’s often too late. FireGuard predicts dangerous conditions before ignition, giving families precious extra minutes to escape. Every component has been chosen for affordability and local availability, so a single unit costs a fraction of traditional alarm systems.</p>
-<b>HOW YOU CAN HELP:</b>
-<p>We are looking for:<br>
+<p><b>ABOUT THE PROJECT:</b><br>
+FireGuard combines a smoke/gas sensor, an infrared flame sensor, and a precision temperature sensor, feeding their data into a lightweight on‑device AI model. This AI learns the difference between normal cooking smoke and a genuine fire threat, drastically reducing false alarms. When a real fire risk is detected, FireGuard sounds a loud local alarm, flashes high‑intensity LEDs, and simultaneously alerts nearby homes via a low‑power mesh network (ESP‑NOW). A central gateway then sends SMS alerts to community leaders and emergency contacts using a SIM800L GSM module — all without needing internet or mains electricity. The system runs on rechargeable batteries with solar support, making it completely off‑grid.</p>
+<p><b>WHY THIS MATTERS:</b><br>
+In informal settlements, fires spread with devastating speed due to overcrowding, highly flammable building materials, and the near-total absence of early warning. By the time smoke is visible, it’s often too late. FireGuard predicts dangerous conditions before ignition, giving families precious extra minutes to escape. Every component has been chosen for affordability and local availability, so a single unit costs a fraction of traditional alarm systems.</p>
+<p><b>HOW YOU CAN HELP:</b><br>
+We are looking for:<br>
 - Expert advice on coding and AI language models suitable for integration with the ESP32 microcontroller<br>
 - Information on different smoke profiles, fire treatments, and detection methods<br>
 - Potential sponsorship which may include access to components, sensors, and software experts in the field of software development<br>
 - Industry connections that could help us test the device in a real‑world environment</p>
-<p>📁 <b><a href="https://drive.google.com/drive/folders/1dLSXFE-GMi38XNnMAVtw1_KkS38SVUIJ?usp=sharing" style="font-weight: bold;">Access All Project Files (presentations, technical slides, poster)</a></b></p>
+<p>📁 <b><a href="https://drive.google.com/drive/folders/1dLSXFE-GMi38XNnMAVtw1_KkS38SVUIJ?usp=sharing">Access All Project Files (presentations, technical slides, poster)</a></b></p>
 <p>For companies based in Johannesburg / Gauteng: I will be available during the holidays for an in‑person meeting with your team.</p>
 <p>My availability for a call or meeting (SAST):<br>
 Monday 07:00–08:30 & 10:00–11:00<br>
@@ -254,7 +227,7 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
 </body></html>"""
 
     msg = MIMEMultipart('alternative')
-    msg['From'] = FROM_EMAIL
+    msg['From'] = PRIMARY_SMTP["from"]
     msg['To'] = to_addr
     msg['Cc'] = CC_ADDR
     msg['Subject'] = subject
@@ -263,83 +236,54 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
     msg.attach(MIMEText(body_plain, 'plain', 'utf-8'))
     msg.attach(MIMEText(body_html, 'html', 'utf-8'))
 
-    overview_file = os.path.join(
-        ATTACH_FOLDER,
-        'FireGuard_Project_Overview.docx')
+    overview_file = os.path.join(ATTACH_FOLDER, 'FireGuard_Project_Overview.docx')
     if os.path.isfile(overview_file):
         ctype, encoding = mimetypes.guess_type(overview_file)
-        if ctype is None or encoding is not None:
-            ctype = 'application/octet-stream'
+        if ctype is None or encoding is not None: ctype = 'application/octet-stream'
         maintype, subtype = ctype.split('/', 1)
         with open(overview_file, 'rb') as fp:
             part = MIMEBase(maintype, subtype)
             part.set_payload(fp.read())
         encoders.encode_base64(part)
-        part.add_header(
-            'Content-Disposition',
-            f'attachment; filename="{
-                os.path.basename(overview_file)}"')
+        part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(overview_file)}"')
         msg.attach(part)
+
+    # 1. Try Gmail
     try:
         _smtp_send(PRIMARY_SMTP, msg)
         return True, 'Gmail'
     except Exception as primary_err:
         print(f'     Gmail failed: {primary_err}')
+        
+        # 2. Try Brevo SMTP
         if SECONDARY_SMTP.get("user") and SECONDARY_SMTP.get("password"):
             try:
                 _smtp_send(SECONDARY_SMTP, msg)
-                return True, 'Brevo'
+                return True, 'Brevo SMTP'
             except Exception as secondary_err:
-                    print(f'     Brevo SMTP failed: {secondary_err}')
-                    if _brevo_api_send(SECONDARY_SMTP, to_addr, subject, body_plain, body_html, overview_file):
-                        return True, 'BrevoAPI'
-                    return False, str(secondary_err)
+                print(f'     Brevo SMTP failed: {secondary_err}')
+                
+                # 3. Try Brevo API
+                if _brevo_api_send(SECONDARY_SMTP, to_addr, subject, body_plain, body_html, overview_file):
+                    return True, 'Brevo API'
+                return False, str(secondary_err)
         return False, str(primary_err)
 
-    return False, 'max retries'
-
-
-def load_rejected_domains():
-    domains = set()
-    try:
-        with open('rejected_domains.txt', 'r') as f:
-            for line in f:
-                domains.add(line.strip().lower())
-    except BaseException:
-        pass
-    return domains
-
-
-def load_responded_domains():
-    domains = set()
-    try:
-        with open('responded_domains.txt', 'r') as f:
-            for line in f:
-                domains.add(line.strip().lower())
-    except BaseException:
-        pass
-    return domains
-
-
+# ---------- Main Execution ----------
 def main():
     init_db()
-    if not os.path.exists(MASTER_CSV):
-        print(
-            f'❌ {MASTER_CSV} not found. Run the discovery bot first (python live_scraper.py).')
-        sys.exit(1)
-    rejected = load_rejected_domains()
-    responded = load_responded_domains()
-    excluded = rejected | responded
 
     rows = []
     with open(MASTER_CSV, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
         for row in reader:
+            # FIX: NoneType error when Status is empty
             if not (row.get('Status') or '').strip():
                 rows.append(row)
 
     if not rows:
-        print('✅ All companies processed. Run live_scraper.py again for fresh companies.')
+        print('✅ All companies processed. Run maps_scraper_sa.py again for fresh companies.')
         return
 
     batch = rows[:DAILY_BATCH]
@@ -355,22 +299,16 @@ def main():
     all_rows = []
     with open(MASTER_CSV, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
         for row in reader:
             all_rows.append(row)
 
     for row in batch:
-        company = (row.get('Company Name') or '').strip()
-        website = (row.get('Website') or '').strip()
+        company = row['Company Name'].strip()
+        website = row['Website'].strip()
         print(f'\n🔍 {company} ({website})')
-        from urllib.parse import urlparse
-        domain = urlparse(website).netloc.replace('www.', '').lower()
-        if domain in excluded:
-            print('   ⏭️  already contacted/rejected – skipping.')
-            for r in all_rows:
-                if r['Website'] == website and r['Company Name'] == company:
-                    r['Status'] = 'skipped'
-            continue
+        
+        domain = urlparse(website).netloc.replace('www.','').lower()
+        
         if not website_alive(website):
             print('   ❌ website not reachable, skipping.')
             for r in all_rows:
@@ -380,25 +318,23 @@ def main():
 
         emails = scrape_emails(website)
         status = ''
+        
         if emails:
             print(f'   scraped: {emails}')
             for r in all_rows:
                 if r['Website'] == website and r['Company Name'] == company:
                     r['Emails Found'] = emails
+                    
             addresses = set()
             for addr in emails.split(','):
                 addr = addr.strip()
-                if not addr or '@' not in addr:
-                    continue
+                if not addr or '@' not in addr: continue
                 addresses.add(addr)
-            verified = [
-                a for a in addresses if has_mx(
-                    a.split('@')[1]) ]
+                
+            verified = [a for a in addresses if has_mx(a.split('@')[1])]
             new_emails = [e for e in verified if not is_sent(e) and not is_bounced(e)]
-            print(
-                f'   {
-                    len(verified)} mailboxes confirmed, {
-                    len(new_emails)} new')
+            print(f'   {len(verified)} mailboxes confirmed, {len(new_emails)} new')
+            
             all_sent = True
             for email in new_emails:
                 success, method = send_email(email, company, attachments)
@@ -421,16 +357,14 @@ def main():
                     r['Emails Found'] = ''
                     r['Status'] = 'no email'
             status = 'no email'
+
+        # Save progress after every company
         with open(MASTER_CSV, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(all_rows)
 
-    print(
-        f'\n🎉 Done! Sent {total_sent} new emails today. {
-            len(rows) -
-            len(batch)} companies remaining.')
-
+    print(f'\n🎉 Done! Sent {total_sent} new emails today. {len(rows)-len(batch)} companies remaining.')
 
 if __name__ == '__main__':
     main()
