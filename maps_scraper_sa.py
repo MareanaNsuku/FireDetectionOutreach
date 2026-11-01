@@ -1,7 +1,13 @@
-import sys, time, urllib.parse, re, csv, random
+import sys
+import time
+import urllib.parse
+import re
+import csv
+import random
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
+# Targeted locations in South Africa
 LOCATIONS = [
     "Johannesburg", "Cape Town", "Durban", "Pretoria", "Gqeberha",
     "East London", "Bloemfontein", "Polokwane", "Mbombela", "Kimberley",
@@ -13,34 +19,35 @@ LOCATIONS = [
     "Springs", "Vereeniging", "Sasolburg", "Paarl", "Worcester"
 ]
 
-
-
+# Strictly relevant categories for FireGuard
 CATEGORIES = [
-    "fire detection company",
-    "fire protection services",
-    "security systems company",
-    "software development company",
-    "embedded systems company",
-    "IoT company",
-    "electronics engineering firm",
+    "fire detection systems",
+    "fire protection equipment",
+    "fire safety equipment suppliers",
+    "IoT hardware development",
+    "embedded systems engineering",
+    "electronics manufacturing services",
+    "hardware engineering company",
     "venture capital firm",
     "angel investor network",
-    "product design company"
+    "disaster prevention technology"
 ]
 
+# Skip these useless results if they pop up in Google Maps
+BLACKLIST = [
+    "restaurant", "pizza", "clothing", "fashion", "marketing", 
+    "law firm", "attorney", "real estate", "car dealership", 
+    "travel", "bakery", "cafe", "hotel", "salon", "plumber", 
+    "towing", "courier", "logistics", "recruitment", "architect",
+    "accounting", "finance", "insurance", "lawyer", "consulting"
+]
 
-
-MAX_PER_QUERY = 8
+MAX_PER_QUERY = 5
 MASTER_CSV = "master_companies.csv"
 
 def accept_consent(page):
     try:
-        for sel in [
-            "button:has-text('Accept all')",
-            "button:has-text('I agree')",
-            "button:has-text('Agree')",
-            "button[aria-label='Accept all']"
-        ]:
+        for sel in ["button:has-text('Accept all')", "button:has-text('I agree')", "button[aria-label='Accept all']"]:
             btn = page.locator(sel)
             if btn.count() > 0:
                 btn.first.click()
@@ -55,35 +62,51 @@ def extract_via_clicks(page, max_results=5):
     loc = page.locator('div[role="feed"] a[aria-label]')
     count = loc.count()
     print(f"  Found {count} main result cards")
+    
     for i in range(min(count, max_results)):
         try:
             card = page.locator('div[role="feed"] a[aria-label]').nth(i)
             aria = card.get_attribute("aria-label")
             if not aria:
                 continue
+                
             low = aria.lower()
+            
+            # Skip buttons and blacklisted words
             if low.startswith(("visit", "open", "call", "about", "ad")):
                 continue
+            if any(word in low for word in BLACKLIST):
+                continue
+            
             if aria in seen:
                 continue
             seen.add(aria)
+            
             card.click()
             page.wait_for_timeout(2200)
 
             hrefs = page.eval_on_selector_all(
-                "div[role='main'] a[href]",
+                "div[role='main'] a[href]", 
                 "els => els.map(e => e.href)"
             )
-            website = next((h for h in hrefs if h.startswith("http") and "google" not in h), "")
+            
+            website = ""
+            for h in hrefs:
+                if h.startswith("http") and "google" not in h:
+                    # Ensure the website URL doesn't contain a blacklisted word
+                    if not any(w in h.lower() for w in BLACKLIST):
+                        website = h
+                        break
+            
             if website:
                 results.append((aria, website))
                 print(f"    ✅ {aria} → {website}")
 
             page.keyboard.press("Escape")
             page.wait_for_timeout(800)
-        except Exception as e:
-            print(f"    ⚠️ Error on card {i}: {e}")
+        except Exception:
             continue
+            
     return results
 
 def domain_of(url):
@@ -97,6 +120,7 @@ def load_existing():
     p = Path(MASTER_CSV)
     if not p.exists():
         return existing, ["Company Name", "Website", "Emails Found", "Status"]
+    
     with open(p, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         fields = reader.fieldnames or ["Company Name", "Website", "Emails Found", "Status"]
@@ -113,7 +137,7 @@ def main():
             queries.append(f"{cat} {loc} South Africa")
 
     existing, fields = load_existing()
-    print(f"🚀 Starting SA-focused Google Maps scraper: {len(queries)} queries")
+    print(f"🚀 Starting targeted scraper: {len(queries)} queries")
     print(f"📁 Existing companies loaded: {len(existing)}")
     new_raw = []
 
@@ -121,39 +145,44 @@ def main():
         browser = p.chromium.launch(
             headless=True,
             args=[
-                "--headless=new",
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
+                "--headless=new", 
+                "--disable-blink-features=AutomationControlled", 
+                "--no-sandbox", 
                 "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             ]
         )
         page = browser.new_page()
+        
         for q in queries:
             print(f"\n🔎 {q}")
             url = f"https://www.google.com/maps/search/{urllib.parse.quote(q)}"
             try:
                 page.goto(url, timeout=30000)
                 accept_consent(page)
+                
                 try:
                     page.wait_for_selector('div[role="feed"] a[aria-label]', timeout=12000)
                 except:
                     print("  ⚠️ No main result cards, waiting 6s anyway")
                     page.wait_for_timeout(6000)
+                    
                 try:
-                    for _ in range(4):
-                        page.mouse.wheel(0, 2000)
-                        page.wait_for_timeout(1000)
+                    page.mouse.wheel(0, 1500)
+                    page.wait_for_timeout(1500)
                 except:
                     pass
+                    
                 results = extract_via_clicks(page, max_results=MAX_PER_QUERY)
                 print(f"  ✅ Extracted {len(results)} companies")
                 new_raw.extend(results)
             except Exception as e:
                 print(f"  ❌ Error: {e}")
-            time.sleep(random.uniform(4, 7))
+                
+            # Slower delay to prevent Google Maps IP bans
+            time.sleep(random.uniform(5, 10))
+            
         browser.close()
 
-    # Add only unique new websites
     added = 0
     for name, website in new_raw:
         key = website.lower().rstrip('/')
