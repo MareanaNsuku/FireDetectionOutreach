@@ -53,7 +53,6 @@ EXCLUDE = {
     user.lower(),
     (cfg.get('BRV_FROM_EMAIL') or '').lower(),
     'ashleymwaramba@gmail.com',
-    'ashley@fireguardsa.co.za',
     'mailer-daemon@googlemail.com',
     'mailer-daemon@gmail.com',
     'postmaster@googlemail.com',
@@ -75,17 +74,20 @@ search_queries = [
 
 for criterion, value in search_queries:
     try:
-        typ, data = M.search(None, 'UNSEEN', criterion, value)
+        typ, data = M.search(None, criterion, value)
         if typ != 'OK':
             continue
-        for num in data[0].split():
+        
+        msg_ids = data[0].split()
+        recent_ids = msg_ids[-100:] if len(msg_ids) > 100 else msg_ids
+        
+        for num in recent_ids:
             try:
                 typ2, msg_data = M.fetch(num, '(RFC822)')
                 if typ2 != 'OK':
                     continue
                 msg = email.message_from_bytes(msg_data[0][1])
 
-                # 1. Try standard headers first
                 for header in ['Final-Recipient', 'Original-Recipient', 'X-Failed-Recipients']:
                     raw = msg.get(header)
                     if raw:
@@ -94,11 +96,12 @@ for criterion, value in search_queries:
                         for a in addrs:
                             failed.add(a.lower())
 
-                # 2. Parse body text with known patterns
                 body = get_text(msg)
                 patterns = [
                     r"Your message wasn['’]?t delivered to\s+([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
                     r"The following address(?:es)? failed:\s*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
+                    r"Delivery has failed to these recipients or groups:\s*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
+                    r"Address not found\s*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
                     r"Final-Recipient:\s*[^;]*;([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
                     r"Original-Recipient:\s*[^;]*;([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
                     r"X-Failed-Recipients:\s*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
@@ -107,16 +110,6 @@ for criterion, value in search_queries:
                     for m in re.finditer(pat, body, re.IGNORECASE):
                         failed.add(m.group(1).lower())
 
-                # 3. General fallback only if text clearly indicates failure
-                if not failed:
-                    if 'failed' in body.lower() or 'undeliverable' in body.lower() or 'couldn\'t be delivered' in body.lower():
-                        addrs = re.findall(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', body)
-                        for a in addrs:
-                            a = a.lower()
-                            if a not in EXCLUDE:
-                                failed.add(a)
-
-                M.store(num, '+FLAGS', '\\Seen')
             except Exception:
                 pass
     except Exception:
@@ -124,14 +117,10 @@ for criterion, value in search_queries:
 
 M.logout()
 
-
 PLACEHOLDER_DOMAINS = {
-    'example.com', 'example.org', 'example.net',
-    'test.com', 'domain.com', 'mailinator.com',
-    'yopmail.com', 'tempmail.com', 'guerrillamail.com',
-    'sharklasers.com', '10minutemail.com', 'throwawaymail.com',
-    'maildrop.cc', 'dispostable.com', 'mailcatch.com',
-    'mailinator.net', 'mailinator.org'
+    'example.com', 'example.org', 'example.net', 'test.com', 'domain.com', 'mailinator.com',
+    'yopmail.com', 'tempmail.com', 'guerrillamail.com', 'sharklasers.com', '10minutemail.com',
+    'throwawaymail.com', 'maildrop.cc', 'dispostable.com', 'mailcatch.com', 'mailinator.net'
 }
 
 def is_placeholder(email):
@@ -140,20 +129,12 @@ def is_placeholder(email):
     local, domain = email.rsplit('@', 1)
     local = local.lower().strip()
     domain = domain.lower().strip()
-
     if domain in PLACEHOLDER_DOMAINS:
         return True
-
     if local.startswith('www.') or local == 'www':
         return True
-
-    if local in {'you', 'your', 'user', 'test', 'example', 'sample',
-                 'placeholder', 'email', 'company', 'john', 'jane',
-                 'someone', 'name', 'firstname', 'lastname', 'support',
-                 'info', 'admin', 'contact', 'mail', 'no-reply',
-                 'noreply', 'owner', 'webmaster', 'postmaster'}:
+    if local in {'you', 'your', 'user', 'test', 'example', 'sample', 'placeholder', 'email', 'company'}:
         return True
-
     return False
 
 clean_failed = {a for a in failed if a not in EXCLUDE and not is_placeholder(a)}
@@ -174,11 +155,6 @@ for a in clean_failed:
 conn.commit()
 conn.close()
 
-with open('bounced_emails.txt', 'a') as f:
-    for a in sorted(clean_failed):
-        f.write(a + '\n')
-
 print(f'Bounce checker: marked {len(clean_failed)} addresses as bounced')
-print('Emails marked:')
 for a in sorted(clean_failed):
     print('  -', a)
