@@ -100,6 +100,21 @@ def website_alive(url):
     except:
         return False
 
+# 🚨 NEW: Filter out generic emails that cause bounces
+def is_generic_or_invalid(email):
+    local = email.split('@')[0].lower()
+    # Ignore these common placeholders and admin addresses
+    blacklist = [
+        'webmaster', 'admin', 'postmaster', 'hostmaster', 'test', 
+        'you', 'your', 'user', 'example', 'info@example', 'john', 
+        'jane', 'name', 'firstname', 'lastname', 'no-reply', 'noreply'
+    ]
+    if local in blacklist:
+        return True
+    if 'example' in email.lower() or 'domain.com' in email.lower():
+        return True
+    return False
+
 # ---------- Sending Logic ----------
 def _smtp_send(smtp_cfg, msg):
     # Try Port 587 (STARTTLS) first
@@ -278,7 +293,6 @@ def main():
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
         for row in reader:
-            # FIX: NoneType error when Status is empty
             if not (row.get('Status') or '').strip():
                 rows.append(row)
 
@@ -329,6 +343,10 @@ def main():
             for addr in emails.split(','):
                 addr = addr.strip()
                 if not addr or '@' not in addr: continue
+                # 🚨 Apply the blacklist filter here
+                if is_generic_or_invalid(addr): 
+                    print(f'   ⏭️ Skipping generic/bounce-prone email: {addr}')
+                    continue
                 addresses.add(addr)
                 
             verified = [a for a in addresses if has_mx(a.split('@')[1])]
