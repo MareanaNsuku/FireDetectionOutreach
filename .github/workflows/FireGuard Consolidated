@@ -1,0 +1,100 @@
+name: FireGuard Consolidated (Scrape + Send)
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 08:00 SAST - Scrape
+    - cron: '0 10 * * *' # 12:00 PM SAST - Send
+  workflow_dispatch:      # Manual backup trigger
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    if: github.event.schedule == '0 6 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 playwright python-dotenv dnspython
+
+      - name: Install Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run Scraper
+        run: python maps_scraper_sa.py
+
+      - name: Commit new companies
+        run: |
+          git config user.name "GitHub Scraper"
+          git config user.email "scraper@fireguard.bot"
+          git add master_companies.csv
+          git commit -m "Update scraped companies [skip ci]" || echo "No changes"
+          git pull origin main --no-rebase -X ours --no-edit || true
+          git push origin main
+
+  send:
+    if: github.event.schedule == '0 10 * * *'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    needs: [scrape]
+    if: always() && (needs.scrape.result == 'success' || needs.scrape.result == 'skipped')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 python-dotenv dnspython
+
+      - name: Create .env file
+        run: |
+          cat > .env <<EOF
+          UCT_EMAIL=${{ secrets.UCT_EMAIL }}
+          UCT_PASSWORD=${{ secrets.UCT_PASSWORD }}
+          UCT_SMTP_HOST=smtp.gmail.com
+          UCT_SMTP_PORT=587
+          BRV_SMTP_HOST=${{ secrets.BRV_SMTP_HOST }}
+          BRV_SMTP_PORT=${{ secrets.BRV_SMTP_PORT }}
+          BRV_SMTP_USER=${{ secrets.BRV_SMTP_USER }}
+          BRV_SMTP_PASS=${{ secrets.BRV_SMTP_PASS }}
+          BRV_FROM_EMAIL=${{ secrets.BRV_FROM_EMAIL }}
+          BRV_API_KEY=${{ secrets.BRV_API_KEY }}
+          EOF
+
+      - name: Run Sender
+        run: |
+          python daily_auto.py
+          python daily_auto.py
+
+      - name: Check Bounces and Cleanup
+        run: |
+          python bounce_checker.py || echo "Bounce checker failed"
+          python cleanup_sent.py || echo "Cleanup failed"
+
+      - name: Commit progress
+        run: |
+          git config user.name "GitHub Sender"
+          git config user.email "sender@fireguard.bot"
+          git add data/sent_emails.db master_companies.csv
+          git commit -m "Update sent emails [skip ci]" || echo "No changes"
+          git pull origin main --no-rebase -X ours --no-edit || true
+          git push origin main
