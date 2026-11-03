@@ -47,7 +47,7 @@ SECONDARY_SMTP = {
 MASTER_CSV = "master_companies.csv"
 SENT_DB = "data/sent_emails.db"
 ATTACH_FOLDER = "attachments"
-DAILY_BATCH = 25
+DAILY_BATCH = 35
 CC_ADDR = "ashleymwaramba@gmail.com"
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 
