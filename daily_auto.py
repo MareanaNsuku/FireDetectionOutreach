@@ -108,7 +108,9 @@ def is_generic_or_invalid(email):
     blacklist = [
         'webmaster', 'admin', 'postmaster', 'hostmaster', 'test', 
         'you', 'your', 'user', 'example', 'info@example', 'john', 
-        'jane', 'name', 'firstname', 'lastname', 'no-reply', 'noreply'
+        'jane', 'name', 'firstname', 'lastname', 'no-reply', 'noreply',
+        'careers', 'jobs', 'hr', 'privacy', 'legal', 'billing', 
+        'abuse', 'spam', 'unsubscribe', 'feedback', 'press', 'media', 'marketing'
     ]
     if local in blacklist:
         return True
