@@ -8,6 +8,7 @@ import mimetypes
 import base64
 import json
 import requests
+import concurrent.futures
 from email.message import EmailMessage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -330,7 +331,15 @@ def main():
                     r['Status'] = 'no website'
             continue
 
-        emails = scrape_emails(website)
+        def get_emails(url):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(scrape_emails, url)
+                try:
+                    return future.result(timeout=30)
+                except concurrent.futures.TimeoutError:
+                    print("   ⏱️ Scraping timed out, skipping.")
+                    return ""
+        emails = get_emails(website)
         status = ''
         
         if emails:
