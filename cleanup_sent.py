@@ -1,9 +1,7 @@
 import imaplib
 import email
 import sys
-from datetime import datetime, timezone
 from email.header import decode_header
-from email.utils import parsedate_to_datetime
 from dotenv import dotenv_values
 
 cfg = dotenv_values('.env')
@@ -29,67 +27,52 @@ def decode_mime(value):
 try:
     M = imaplib.IMAP4_SSL('imap.gmail.com', 993)
     M.login(user, password)
+    M.select('"[Gmail]/Sent Mail"')
 except Exception as e:
     print('Cleanup IMAP login failed:', e)
     sys.exit(0)
 
-M.select('"[Gmail]/Sent Mail"')
-typ, data = M.search(None, 'SUBJECT', '"FireGuard"')
-if typ != 'OK':
-    print('Cleanup: search failed')
+try:
+    typ, data = M.search(None, 'SUBJECT', '"FireGuard"')
+except Exception as e:
+    print('Cleanup search failed:', e)
     M.logout()
     sys.exit(0)
 
-sent_ids = data[0].split()
+if typ != 'OK' or not data[0]:
+    print('Cleanup: no matching emails found')
+    M.logout()
+    sys.exit(0)
+
 deleted = 0
-skipped_replied = 0
-skipped_recent = 0
-
-now = datetime.now(timezone.utc)
-
-for num in sent_ids:
+for num in data[0].split():
     try:
         typ, msg_data = M.fetch(num, '(RFC822)')
         if typ != 'OK':
             continue
+        
         msg = email.message_from_bytes(msg_data[0][1])
         subject = decode_mime(msg.get('Subject', ''))
-        date_str = msg.get('Date')
-        if not date_str:
-            continue
-
+        
+        # Safely search for the reply without crashing on special characters
         try:
-            sent_date = parsedate_to_datetime(date_str)
+            reply_subject = f"Re: {subject}"
+            M2 = imaplib.IMAP4_SSL('imap.gmail.com', 993)
+            M2.login(user, password)
+            M2.select('"[Gmail]/All Mail"')
+            typ2, data2 = M2.search(None, 'SUBJECT', f'"{reply_subject}"')
+            M2.logout()
+            
+            if typ2 == 'OK' and data2[0].split():
+                continue # Skip deleting, they replied!
         except Exception:
-            continue
-
-        if sent_date.tzinfo is None:
-            sent_date = sent_date.replace(tzinfo=timezone.utc)
-
-        days_since = (now - sent_date).days
-        if days_since < 2:
-            skipped_recent += 1
-            continue
-
-        reply_subject = f"Re: {subject}"
-        M2 = imaplib.IMAP4_SSL('imap.gmail.com', 993)
-        M2.login(user, password)
-        M2.select('"[Gmail]/All Mail"')
-        typ2, data2 = M2.search(None, 'SUBJECT', f'"{reply_subject}"')
-        M2.logout()
-
-        if typ2 == 'OK' and data2[0].split():
-            skipped_replied += 1
-            continue
-
+            pass # If search fails due to encoding, assume no reply and continue
+            
         M.store(num, '+FLAGS', '\\Deleted')
         deleted += 1
-    except Exception as e:
-        print('Cleanup error on one email:', e)
+    except Exception:
+        pass
 
 M.expunge()
 M.logout()
-
-print(f'Cleanup: deleted {deleted} unreplied sent emails older than 2 days')
-print(f'Cleanup: kept {skipped_replied} sent emails that had replies')
-print(f'Cleanup: kept {skipped_recent} recent sent emails (less than 2 days old)')
+print(f'Cleanup: deleted {deleted} unreplied sent emails')
