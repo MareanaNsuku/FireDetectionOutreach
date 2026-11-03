@@ -47,7 +47,7 @@ SECONDARY_SMTP = {
 MASTER_CSV = "master_companies.csv"
 SENT_DB = "data/sent_emails.db"
 ATTACH_FOLDER = "attachments"
-DAILY_BATCH = 50
+DAILY_BATCH = 25
 CC_ADDR = "ashleymwaramba@gmail.com"
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 
@@ -120,7 +120,7 @@ def is_generic_or_invalid(email):
 def _smtp_send(smtp_cfg, msg):
     # Try Port 587 (STARTTLS) first
     try:
-        with smtplib.SMTP(smtp_cfg["host"], smtp_cfg["port"], timeout=30) as server:
+        with smtplib.SMTP(smtp_cfg["host"], smtp_cfg["port"], timeout=10) as server:
             server.starttls()
             server.login(smtp_cfg["user"], smtp_cfg["password"])
             server.send_message(msg)
@@ -130,7 +130,7 @@ def _smtp_send(smtp_cfg, msg):
         
     # Fallback to Port 465 (SSL)
     try:
-        with smtplib.SMTP_SSL(smtp_cfg["host"], 465, timeout=30) as server:
+        with smtplib.SMTP_SSL(smtp_cfg["host"], 465, timeout=10) as server:
             server.login(smtp_cfg["user"], smtp_cfg["password"])
             server.send_message(msg)
     except Exception as e:
@@ -157,7 +157,7 @@ def _brevo_api_send(cfg, to_addr, subject, text_content, html_content, attachmen
         }]
     headers = {"api-key": api_key, "Content-Type": "application/json"}
     try:
-        resp = requests.post("https://api.brevo.com/v3/smtp/email", headers=headers, json=payload, timeout=30)
+        resp = requests.post("https://api.brevo.com/v3/smtp/email", headers=headers, json=payload, timeout=10)
         if resp.status_code in (200, 201):
             return True
         print(f"     Brevo API failed: {resp.status_code} {resp.text[:200]}")
@@ -264,25 +264,25 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
         part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(overview_file)}"')
         msg.attach(part)
 
-    # 1. Try Gmail
+    # 1. Try Brevo SMTP FIRST (Faster on GitHub Actions)
+    if SECONDARY_SMTP.get("user") and SECONDARY_SMTP.get("password"):
+        try:
+            _smtp_send(SECONDARY_SMTP, msg)
+            return True, 'Brevo SMTP'
+        except Exception as secondary_err:
+            print(f'     Brevo SMTP failed: {secondary_err}')
+            
+            # 2. Try Brevo API
+            if _brevo_api_send(SECONDARY_SMTP, to_addr, subject, body_plain, body_html, overview_file):
+                return True, 'Brevo API'
+            print(f'     Brevo API failed.')
+    
+    # 3. Fallback to Gmail
     try:
         _smtp_send(PRIMARY_SMTP, msg)
         return True, 'Gmail'
     except Exception as primary_err:
         print(f'     Gmail failed: {primary_err}')
-        
-        # 2. Try Brevo SMTP
-        if SECONDARY_SMTP.get("user") and SECONDARY_SMTP.get("password"):
-            try:
-                _smtp_send(SECONDARY_SMTP, msg)
-                return True, 'Brevo SMTP'
-            except Exception as secondary_err:
-                print(f'     Brevo SMTP failed: {secondary_err}')
-                
-                # 3. Try Brevo API
-                if _brevo_api_send(SECONDARY_SMTP, to_addr, subject, body_plain, body_html, overview_file):
-                    return True, 'Brevo API'
-                return False, str(secondary_err)
         return False, str(primary_err)
 
 # ---------- Main Execution ----------
@@ -335,7 +335,7 @@ def main():
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(scrape_emails, url)
                 try:
-                    return future.result(timeout=30)
+                    return future.result(timeout=10)
                 except concurrent.futures.TimeoutError:
                     print("   ⏱️ Scraping timed out, skipping.")
                     return ""
