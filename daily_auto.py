@@ -245,7 +245,10 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
 </body></html>"""
 
     msg = MIMEMultipart('alternative')
-    msg['From'] = PRIMARY_SMTP["from"]
+    
+    # 🚨 THE CRITICAL FIX: Use Brevo's verified email as the From address
+    msg['From'] = SECONDARY_SMTP["from"] 
+    
     msg['To'] = to_addr
     msg['Cc'] = CC_ADDR
     msg['Subject'] = subject
@@ -281,6 +284,8 @@ LinkedIn: https://www.linkedin.com/in/nsukumareana/</p>
     
     # 3. Fallback to Gmail
     try:
+        # 🚨 CHANGE FROM BACK TO GMAIL IF FALLING BACK
+        msg.replace_header('From', PRIMARY_SMTP["from"])
         _smtp_send(PRIMARY_SMTP, msg)
         return True, 'Gmail'
     except Exception as primary_err:
