@@ -45,7 +45,6 @@ jobs:
       - name: Run Sender
         run: |
           python daily_auto.py
-          python daily_auto.py
 
       - name: Check Bounces and Cleanup
         run: |
@@ -56,7 +55,7 @@ jobs:
         run: |
           git config user.name "GitHub Sender"
           git config user.email "sender@fireguard.bot"
-          git add data/sent_emails.db master_companies.csv
+          git add data/sent_emails.db master_companies.csv || true
           git commit -m "Update sent emails [skip ci]" || echo "No changes to commit"
           git pull origin main --no-rebase -X ours --no-edit || true
           git push origin main
